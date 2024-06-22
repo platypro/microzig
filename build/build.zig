@@ -23,7 +23,7 @@ pub fn build(b: *Build) !void {
     const uf2_dep = b.dependency("microzig/tools/uf2", .{});
 
     const build_test = b.addTest(.{
-        .root_source_file = .{ .path = "build.zig" },
+        .root_source_file = b.path("build.zig"),
     });
 
     build_test.root_module.addAnonymousImport("uf2", .{
@@ -53,7 +53,7 @@ pub fn init(b: *Build, opts: struct {
         .microzig_core = core_dep,
         .generate_linkerscript = mz_dep.builder.addExecutable(.{
             .name = "generate-linkerscript",
-            .root_source_file = .{ .path = "src/generate_linkerscript.zig" },
+            .root_source_file = b.path("src/generate_linkerscript.zig"),
             .target = mz_dep.builder.host,
         }),
     };
