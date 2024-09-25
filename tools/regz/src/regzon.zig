@@ -691,8 +691,8 @@ fn populate_type(
     if (db.types.enum_fields.get(id)) |enum_field| {
         try typ.put("value", .{ .integer = enum_field });
     } else if (db.types.modes.get(id)) |mode| {
-        try typ.put("value", .{ .string = mode.value });
-        try typ.put("qualifier", .{ .string = mode.qualifier });
+        try typ.put("value", if (mode.value == null) .{ .null = {} } else .{ .string = mode.value.? });
+        try typ.put("qualifier", if (mode.qualifier == null) .{ .null = {} } else .{ .string = mode.qualifier.? });
     }
 
     var children = ObjectMap.init(allocator);

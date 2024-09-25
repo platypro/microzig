@@ -198,8 +198,8 @@ pub const Device = struct {
 };
 
 pub const Mode = struct {
-    qualifier: []const u8,
-    value: []const u8,
+    qualifier: ?[]const u8,
+    value: ?[]const u8,
 };
 
 /// a collection of modes that applies to a register or bitfield
@@ -703,8 +703,8 @@ pub fn create_enum_field(
 pub fn create_mode(db: *Database, parent_id: EntityId, opts: struct {
     name: []const u8,
     description: ?[]const u8 = null,
-    value: []const u8,
-    qualifier: []const u8,
+    value: ?[]const u8,
+    qualifier: ?[]const u8,
 }) !EntityId {
     // TODO: what types of parents can it have?
     const id = db.create_entity();
@@ -712,8 +712,8 @@ pub fn create_mode(db: *Database, parent_id: EntityId, opts: struct {
 
     log.debug("{}: creating mode", .{id});
     try db.types.modes.put(db.gpa, id, .{
-        .value = try db.arena.allocator().dupe(u8, opts.value),
-        .qualifier = try db.arena.allocator().dupe(u8, opts.qualifier),
+        .value = if (opts.value == null) null else try db.arena.allocator().dupe(u8, opts.value.?),
+        .qualifier = if (opts.qualifier == null) null else try db.arena.allocator().dupe(u8, opts.qualifier.?),
     });
     try db.add_name(id, opts.name);
 

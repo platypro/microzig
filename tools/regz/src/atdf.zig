@@ -491,8 +491,8 @@ fn load_mode(ctx: *Context, node: xml.Node, parent_id: EntityId) !void {
     const id = try db.create_mode(parent_id, .{
         .name = node.get_attribute("name") orelse return error.MissingModeName,
         .description = node.get_attribute("caption"),
-        .value = node.get_attribute("value") orelse return error.MissingModeValue,
-        .qualifier = node.get_attribute("qualifier") orelse return error.MissingModeQualifier,
+        .value = node.get_attribute("value"),
+        .qualifier = node.get_attribute("qualifier"),
     });
     errdefer db.destroy_entity(id);
 
@@ -631,10 +631,12 @@ fn load_register(
 
     // assumes that modes are parsed before registers in the register group
     var mode_it = node.iterate(&.{}, &.{"mode"});
-    while (mode_it.next()) |mode_node|
+    while (mode_it.next()) |mode_node| {
+        log.debug("Found Mode {s}", .{mode_node.get_attribute("name").?});
         load_mode(ctx, mode_node, id) catch |err| {
             log.err("{}: failed to load mode: {}", .{ id, err });
         };
+    }
 
     var field_it = node.iterate(&.{}, &.{"bitfield"});
     while (field_it.next()) |field_node|

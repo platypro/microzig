@@ -511,7 +511,11 @@ fn write_mode_enum_and_fn(
         defer components.deinit();
 
         const mode = db.types.modes.get(mode_id).?;
-        var tok_it = std.mem.tokenizeScalar(u8, mode.qualifier, '.');
+        if (mode.qualifier == null or mode.value == null) {
+            continue;
+        }
+
+        var tok_it = std.mem.tokenizeScalar(u8, mode.qualifier.?, '.');
         while (tok_it.next()) |token|
             try components.append(token);
 
@@ -526,7 +530,7 @@ fn write_mode_enum_and_fn(
         });
         try writer.writeAll("switch (value) {\n");
 
-        tok_it = std.mem.tokenizeScalar(u8, mode.value, ' ');
+        tok_it = std.mem.tokenizeScalar(u8, mode.value.?, ' ');
         while (tok_it.next()) |token| {
             const value = try std.fmt.parseInt(u64, token, 0);
             try writer.print("{},\n", .{value});
@@ -559,7 +563,7 @@ fn write_registers_with_modes(
     mode_set: EntitySet,
     registers: std.ArrayList(EntityWithOffset),
     out_writer: anytype,
-) !void {
+) anyerror!void {
     const allocator = db.arena.allocator();
     var buffer = std.ArrayList(u8).init(db.arena.allocator());
     defer buffer.deinit();
@@ -666,6 +670,41 @@ fn write_registers_base(
     try out_writer.writeAll(buffer.items);
 }
 
+fn write_register_fields(
+    db: Database,
+    field_set: EntitySet,
+    size: u64,
+    mode: ?u32,
+    writer: anytype,
+    allocator: std.mem.Allocator,
+) !void {
+    var fields = std.ArrayList(EntityWithOffset).init(allocator);
+    defer fields.deinit();
+
+    for (field_set.keys()) |field_id| {
+        if (db.attrs.modes.get(field_id)) |mode_lookup| modelook: {
+            for (mode_lookup.keys()) |mode_scan| {
+                if (std.meta.eql(mode, mode_scan)) {
+                    break :modelook;
+                }
+            }
+            continue;
+        }
+        try fields.append(.{
+            .id = field_id,
+            .offset = db.attrs.offset.get(field_id) orelse continue,
+        });
+    }
+
+    std.sort.insertion(EntityWithOffset, fields.items, {}, EntityWithOffset.less_than);
+
+    try writer.print("packed struct(u{}) {{\n", .{
+        size,
+    });
+    try write_fields(db, fields.items, size, writer);
+    try writer.writeAll("},");
+}
+
 fn write_register(
     db: Database,
     register_id: EntityId,
@@ -694,24 +733,18 @@ fn write_register(
             std.zig.fmtId(name),
         });
     } else if (db.children.fields.get(register_id)) |field_set| {
-        var fields = std.ArrayList(EntityWithOffset).init(db.gpa);
-        defer fields.deinit();
-
-        for (field_set.keys()) |field_id|
-            try fields.append(.{
-                .id = field_id,
-                .offset = db.attrs.offset.get(field_id) orelse continue,
-            });
-
-        std.sort.insertion(EntityWithOffset, fields.items, {}, EntityWithOffset.less_than);
-        try writer.print("{}: {s}mmio.Mmio(packed struct(u{}) {{\n", .{
-            std.zig.fmtId(name),
-            array_prefix,
-            size,
-        });
-
-        try write_fields(db, fields.items, size, writer);
-        try writer.writeAll("}),\n");
+        try writer.print("{}: {s}mmio.Mmio(", .{ std.zig.fmtId(name), array_prefix });
+        if (db.children.modes.get(register_id)) |modes_set| {
+            try writer.print("packed union {{", .{});
+            for (modes_set.keys()) |mode| {
+                try writer.print("{s}:", .{db.attrs.name.get(mode) orelse unreachable});
+                try write_register_fields(db, field_set, size, mode, writer, db.gpa);
+            }
+            try writer.writeAll("}");
+        } else {
+            try write_register_fields(db, field_set, size, null, writer, db.gpa);
+        }
+        try writer.writeAll("),\n");
     } else try writer.print("{}: {s}u{},\n", .{
         std.zig.fmtId(name),
         array_prefix,
@@ -731,7 +764,7 @@ fn write_fields(
     var buffer = std.ArrayList(u8).init(db.arena.allocator());
     defer buffer.deinit();
 
-    // don't have to care about modes
+    // don't have to care about modes since the entries are already pre-filtered
     // prioritize smaller fields that come earlier
     const writer = buffer.writer();
     var offset: u64 = 0;
