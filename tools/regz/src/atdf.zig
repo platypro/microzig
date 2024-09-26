@@ -112,6 +112,7 @@ fn load_param(ctx: *Context, node: xml.Node, device_id: EntityId) !void {
     validate_attrs(node, &.{
         "name",
         "value",
+        "caption",
     });
 
     const name = node.get_attribute("name") orelse return error.MissingParamName;
@@ -575,6 +576,7 @@ fn load_register(
         "caption",
         "count",
         "offset",
+        "name-in-module",
     });
 
     const name = node.get_attribute("name") orelse return error.MissingRegisterName;
